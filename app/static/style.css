@@ -9,6 +9,7 @@
     --primary: #3b82f6;
     --fb-color: #4267B2;
     --google-color: #4285F4;
+    --tiktok-color: #010101;
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
@@ -65,6 +66,7 @@ h1 { font-size: 24px; margin-bottom: 8px; }
 
 .card-fb { border-left: 4px solid var(--fb-color); }
 .card-google { border-left: 4px solid var(--google-color); }
+.card-tiktok { border-left: 4px solid var(--tiktok-color); }
 
 .card-grid {
     display: grid;
@@ -223,6 +225,7 @@ h1 { font-size: 24px; margin-bottom: 8px; }
 
 .badge-fb { background: #dbeafe; color: #1e40af; }
 .badge-google { background: #fef3c7; color: #b45309; }
+.badge-tiktok { background: #f0f0f0; color: #010101; }
 
 .btn-danger {
     background: var(--danger);

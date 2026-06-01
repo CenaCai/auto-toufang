@@ -12,27 +12,38 @@ from app.database import async_session
 from app.services.ads_interface import AdsClient
 from app.services.mock_facebook import MockFacebookClient
 from app.services.mock_google import MockGoogleClient
+from app.services.mock_tiktok import MockTikTokClient
 
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
-# Platform clients (global singletons)
-_fb_client: AdsClient | None = None
-_google_client: AdsClient | None = None
+# Platform clients keyed by platform name
+_clients: dict[str, AdsClient] = {}
 
 
-def get_clients() -> tuple[AdsClient, AdsClient]:
-    """Get or create platform client instances."""
-    global _fb_client, _google_client
-    if _fb_client is None:
+def get_clients() -> dict[str, AdsClient]:
+    """Get or create all platform client instances."""
+    global _clients
+    if not _clients:
         if settings.app.use_mock:
-            _fb_client = MockFacebookClient()
-            _google_client = MockGoogleClient()
+            _clients = {
+                "facebook": MockFacebookClient(),
+                "google": MockGoogleClient(),
+                "tiktok": MockTikTokClient(),
+            }
         else:
             # Future: instantiate real API clients here
             raise NotImplementedError("Real API clients not yet implemented")
-    return _fb_client, _google_client
+    return _clients
+
+
+def get_client_for_platform(platform: str) -> AdsClient:
+    """Get the client for a specific platform."""
+    clients = get_clients()
+    if platform not in clients:
+        raise ValueError(f"Unknown platform: {platform}")
+    return clients[platform]
 
 
 async def hourly_job():
@@ -41,17 +52,17 @@ async def hourly_job():
 
     logger.info("=== Hourly job started ===")
 
-    fb, google = get_clients()
+    clients = get_clients()
 
     async with async_session() as db:
         try:
             # 1. Check and rotate creatives
-            rotation_actions = await campaign_manager.check_and_rotate_creatives(db, fb, google)
+            rotation_actions = await campaign_manager.check_and_rotate_creatives(db, clients)
             if rotation_actions:
                 logger.info(f"Creative rotations: {rotation_actions}")
 
             # 2. Optimize budget allocation
-            opt_result = await budget_optimizer.optimize(db, fb, google)
+            opt_result = await budget_optimizer.optimize(db, clients)
             logger.info(f"Optimization: {opt_result.action}, allocation={opt_result.budget_allocation}")
 
             # 3. Build hourly report

@@ -37,6 +37,7 @@ async def _send_feishu(report: dict) -> bool:
         summary = report.get("summary", {})
         fb = report.get("platform_breakdown", {}).get("facebook", {})
         google = report.get("platform_breakdown", {}).get("google", {})
+        tiktok = report.get("platform_breakdown", {}).get("tiktok", {})
 
         title = f"{'小时报' if report_type == 'hourly' else '日报'} - 广告投放报告"
 
@@ -74,7 +75,10 @@ async def _send_feishu(report: dict) -> bool:
                                 f"ROAS {fb.get('overall_roas', 0):.2f}\n"
                                 f"**Google Ads**: 花费 ${google.get('total_spend', 0):,.2f} | "
                                 f"CPI ${google.get('avg_cpi', 0):.2f} | "
-                                f"ROAS {google.get('overall_roas', 0):.2f}"
+                                f"ROAS {google.get('overall_roas', 0):.2f}\n"
+                                f"**TikTok Ads**: 花费 ${tiktok.get('total_spend', 0):,.2f} | "
+                                f"CPI ${tiktok.get('avg_cpi', 0):.2f} | "
+                                f"ROAS {tiktok.get('overall_roas', 0):.2f}"
                             ),
                         },
                     },
@@ -103,6 +107,10 @@ async def _send_email(report: dict) -> bool:
         google = report.get("platform_breakdown", {}).get("google", {})
 
         subject = f"广告投放{'小时报' if report_type == 'hourly' else '日报'} - {report.get('period_start', '')}"
+
+        fb = report.get("platform_breakdown", {}).get("facebook", {})
+        google = report.get("platform_breakdown", {}).get("google", {})
+        tiktok = report.get("platform_breakdown", {}).get("tiktok", {})
 
         # Build HTML email body
         html = f"""
@@ -160,6 +168,18 @@ async def _send_email(report: dict) -> bool:
                     <td style="padding: 8px; border: 1px solid #ddd;">${google.get('total_spend', 0):,.2f}</td>
                     <td style="padding: 8px; border: 1px solid #ddd;">${google.get('avg_cpi', 0):.2f}</td>
                     <td style="padding: 8px; border: 1px solid #ddd;">{google.get('overall_roas', 0):.2f}</td>
+                </tr>
+                <tr style="background: #010101; color: white;">
+                    <th style="padding: 8px;">TikTok Ads</th>
+                    <th style="padding: 8px;">花费</th>
+                    <th style="padding: 8px;">CPI</th>
+                    <th style="padding: 8px;">ROAS</th>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">${tiktok.get('total_spend', 0):,.2f}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">${tiktok.get('avg_cpi', 0):.2f}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{tiktok.get('overall_roas', 0):.2f}</td>
                 </tr>
             </table>
 

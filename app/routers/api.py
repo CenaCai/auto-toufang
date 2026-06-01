@@ -14,7 +14,7 @@ from app.schemas import (
     CampaignCreate, CampaignOut, CampaignUpdate, CreativeCreate,
     ReportOut, TodayStats,
 )
-from app.scheduler import get_clients, hourly_job
+from app.scheduler import get_clients, get_client_for_platform, hourly_job
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -35,8 +35,8 @@ async def list_campaigns(db: AsyncSession = Depends(get_db)):
 
 @router.post("/campaigns", response_model=CampaignOut)
 async def create_campaign(data: CampaignCreate, db: AsyncSession = Depends(get_db)):
-    if data.platform not in ("facebook", "google"):
-        raise HTTPException(400, "platform must be 'facebook' or 'google'")
+    if data.platform not in ("facebook", "google", "tiktok"):
+        raise HTTPException(400, "platform must be 'facebook', 'google', or 'tiktok'")
 
     campaign = Campaign(
         name=data.name,
@@ -100,8 +100,7 @@ async def pause_campaign(campaign_id: int, db: AsyncSession = Depends(get_db)):
     if not campaign:
         raise HTTPException(404, "Campaign not found")
 
-    fb_client, google_client = get_clients()
-    client = fb_client if campaign.platform == "facebook" else google_client
+    client = get_client_for_platform(campaign.platform)
     await client.pause_campaign(campaign.id)
 
     campaign.is_active = False
@@ -117,8 +116,7 @@ async def resume_campaign(campaign_id: int, db: AsyncSession = Depends(get_db)):
     if not campaign:
         raise HTTPException(404, "Campaign not found")
 
-    fb_client, google_client = get_clients()
-    client = fb_client if campaign.platform == "facebook" else google_client
+    client = get_client_for_platform(campaign.platform)
     await client.resume_campaign(campaign.id)
 
     campaign.is_active = True
@@ -148,8 +146,7 @@ async def switch_creative(
     if not creatives:
         raise HTTPException(400, "No active creatives available for this campaign")
 
-    fb_client, google_client = get_clients()
-    client = fb_client if campaign.platform == "facebook" else google_client
+    client = get_client_for_platform(campaign.platform)
 
     if creative_id is not None:
         # Switch to specific creative
@@ -186,8 +183,7 @@ async def delete_campaign(campaign_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(404, "Campaign not found")
 
     # Pause on platform first
-    fb_client, google_client = get_clients()
-    client = fb_client if campaign.platform == "facebook" else google_client
+    client = get_client_for_platform(campaign.platform)
     await client.pause_campaign(campaign.id)
 
     await db.delete(campaign)
@@ -288,15 +284,26 @@ async def today_stats(db: AsyncSession = Depends(get_db)):
     )
     records = list(result.scalars().all())
 
-    fb_records = [r for r in records if r.platform == "facebook"]
-    google_records = [r for r in records if r.platform == "google"]
+    from app.config import settings
+    from app.schemas import PlatformStats
 
-    fb_spend = sum(r.spend for r in fb_records)
-    google_spend = sum(r.spend for r in google_records)
-    fb_installs = sum(r.installs for r in fb_records)
-    google_installs = sum(r.installs for r in google_records)
-    fb_revenue = sum(r.revenue for r in fb_records)
-    google_revenue = sum(r.revenue for r in google_records)
+    platforms_stats = {}
+    total_installs = 0
+    total_spend = 0.0
+
+    for platform in ("facebook", "google", "tiktok"):
+        p_records = [r for r in records if r.platform == platform]
+        p_spend = sum(r.spend for r in p_records)
+        p_installs = sum(r.installs for r in p_records)
+        p_revenue = sum(r.revenue for r in p_records)
+        total_spend += p_spend
+        total_installs += p_installs
+        platforms_stats[platform] = PlatformStats(
+            spend=round(p_spend, 2),
+            avg_cpi=round(p_spend / max(p_installs, 1), 2),
+            roas=round(p_revenue / max(p_spend, 0.01), 2),
+            installs=p_installs,
+        )
 
     # Active campaigns count
     camp_result = await db.execute(
@@ -304,20 +311,13 @@ async def today_stats(db: AsyncSession = Depends(get_db)):
     )
     active_count = camp_result.scalar_one()
 
-    from app.config import settings
-
     return TodayStats(
         date=today_start.strftime("%Y-%m-%d"),
-        total_spend=round(fb_spend + google_spend, 2),
+        total_spend=round(total_spend, 2),
         daily_cap=settings.app.daily_spend_cap,
-        fb_spend=round(fb_spend, 2),
-        google_spend=round(google_spend, 2),
-        fb_avg_cpi=round(fb_spend / max(fb_installs, 1), 2),
-        google_avg_cpi=round(google_spend / max(google_installs, 1), 2),
-        fb_roas=round(fb_revenue / max(fb_spend, 0.01), 2),
-        google_roas=round(google_revenue / max(google_spend, 0.01), 2),
+        platforms=platforms_stats,
         active_campaigns=active_count,
-        total_installs=fb_installs + google_installs,
+        total_installs=total_installs,
     )
 
 
@@ -373,6 +373,31 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)):
                 {"name": "KR Video v1", "asset_url": "https://example.com/g_kr_v1.mp4"},
                 {"name": "KR HTML5", "asset_url": "https://example.com/g_kr_html5.zip"},
                 {"name": "KR Display", "asset_url": "https://example.com/g_kr_display.zip"},
+            ],
+        ),
+        CampaignCreate(
+            name="TikTok - Game Install US",
+            platform="tiktok",
+            external_id="1790663820000001",
+            budget_cap=2000.0,
+            cpi_cap=2.8,
+            roas_threshold=1.2,
+            creatives=[
+                {"name": "Short Video v1", "asset_url": "https://example.com/tt_us_v1.mp4"},
+                {"name": "Short Video v2", "asset_url": "https://example.com/tt_us_v2.mp4"},
+                {"name": "Spark Ad", "asset_url": "https://example.com/tt_us_spark.mp4"},
+            ],
+        ),
+        CampaignCreate(
+            name="TikTok - Game Install SEA",
+            platform="tiktok",
+            external_id="1790663820000002",
+            budget_cap=1200.0,
+            cpi_cap=1.5,
+            roas_threshold=1.0,
+            creatives=[
+                {"name": "SEA Video v1", "asset_url": "https://example.com/tt_sea_v1.mp4"},
+                {"name": "SEA UGC Style", "asset_url": "https://example.com/tt_sea_ugc.mp4"},
             ],
         ),
     ]

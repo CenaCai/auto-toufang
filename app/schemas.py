@@ -66,6 +66,8 @@ class CampaignOut(BaseModel):
                 self.platform_url = f"https://business.facebook.com/adsmanager/manage/campaigns?act=&selected_campaign_ids={self.external_id}"
             elif self.platform == "google":
                 self.platform_url = f"https://ads.google.com/aw/campaigns?campaignId={self.external_id}"
+            elif self.platform == "tiktok":
+                self.platform_url = f"https://ads.tiktok.com/i18n/perf?aadvid={self.external_id}"
 
 
 # --- Stats ---
@@ -94,9 +96,8 @@ class OptimizationResult(BaseModel):
     timestamp: datetime.datetime
     daily_spend_total: float
     daily_cap: float
-    fb_summary: PlatformSummary | None = None
-    google_summary: PlatformSummary | None = None
-    action: str  # "split_even", "shift_to_fb", "shift_to_google", "paused_all"
+    platform_summaries: dict[str, PlatformSummary] = {}  # platform_name -> summary
+    action: str  # "split_even", "shift_to_<platform>", "paused_all"
     budget_allocation: dict[str, float] = {}  # platform -> allocated budget
 
 
@@ -128,15 +129,17 @@ class ReportOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PlatformStats(BaseModel):
+    spend: float = 0.0
+    avg_cpi: float = 0.0
+    roas: float = 0.0
+    installs: int = 0
+
+
 class TodayStats(BaseModel):
     date: str
     total_spend: float
     daily_cap: float
-    fb_spend: float
-    google_spend: float
-    fb_avg_cpi: float
-    google_avg_cpi: float
-    fb_roas: float
-    google_roas: float
+    platforms: dict[str, PlatformStats] = {}  # platform_name -> stats
     active_campaigns: int
     total_installs: int

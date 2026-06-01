@@ -18,40 +18,26 @@
 
 <!-- Platform cards -->
 <div class="card-grid">
-    <div class="card card-fb">
-        <h3>Facebook Ads</h3>
+    {% for key, label, css in [('facebook', 'Facebook Ads', 'card-fb'), ('google', 'Google Ads', 'card-google'), ('tiktok', 'TikTok Ads', 'card-tiktok')] %}
+    {% set p = platforms.get(key, {}) %}
+    <div class="card {{ css }}">
+        <h3>{{ label }}</h3>
         <div class="card-stats">
             <div class="stat">
                 <span class="stat-label">花费</span>
-                <span class="stat-value">${{ fb_spend }}</span>
+                <span class="stat-value">${{ p.get('spend', 0) }}</span>
             </div>
             <div class="stat">
                 <span class="stat-label">CPI</span>
-                <span class="stat-value">${{ fb_cpi }}</span>
+                <span class="stat-value">${{ p.get('cpi', 0) }}</span>
             </div>
             <div class="stat">
                 <span class="stat-label">ROAS</span>
-                <span class="stat-value">{{ fb_roas }}</span>
+                <span class="stat-value">{{ p.get('roas', 0) }}</span>
             </div>
         </div>
     </div>
-    <div class="card card-google">
-        <h3>Google Ads</h3>
-        <div class="card-stats">
-            <div class="stat">
-                <span class="stat-label">花费</span>
-                <span class="stat-value">${{ google_spend }}</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">CPI</span>
-                <span class="stat-value">${{ google_cpi }}</span>
-            </div>
-            <div class="stat">
-                <span class="stat-label">ROAS</span>
-                <span class="stat-value">{{ google_roas }}</span>
-            </div>
-        </div>
-    </div>
+    {% endfor %}
 </div>
 
 <!-- Summary row -->

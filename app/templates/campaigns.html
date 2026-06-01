@@ -11,8 +11,8 @@
 <div class="card campaign-card {% if not c.is_active %}card-inactive{% endif %}">
     <div class="campaign-header">
         <div class="campaign-title">
-            <span class="badge {% if c.platform == 'facebook' %}badge-fb{% else %}badge-google{% endif %}">
-                {{ 'Facebook' if c.platform == 'facebook' else 'Google' }}
+            <span class="badge {% if c.platform == 'facebook' %}badge-fb{% elif c.platform == 'google' %}badge-google{% elif c.platform == 'tiktok' %}badge-tiktok{% endif %}">
+                {% if c.platform == 'facebook' %}Facebook{% elif c.platform == 'google' %}Google{% elif c.platform == 'tiktok' %}TikTok{% endif %}
             </span>
             <h3 style="display:inline; margin-left:8px;">{{ c.name }}</h3>
             {% if not c.is_active %}
@@ -24,7 +24,7 @@
         <div class="campaign-actions">
             {% if c.external_id %}
             <a href="{{ c.platform_url }}" target="_blank" class="btn btn-sm btn-outline"
-               title="在{{ 'Facebook' if c.platform == 'facebook' else 'Google' }}后台查看">
+               title="在{% if c.platform == 'facebook' %}Facebook{% elif c.platform == 'google' %}Google{% elif c.platform == 'tiktok' %}TikTok{% endif %}后台查看">
                 跳转后台 &rarr;
             </a>
             {% endif %}
@@ -144,6 +144,7 @@
                     <select id="new_platform">
                         <option value="facebook">Facebook</option>
                         <option value="google">Google</option>
+                        <option value="tiktok">TikTok</option>
                     </select>
                 </label>
             </div>

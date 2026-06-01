@@ -30,16 +30,22 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     )
     records = list(result.scalars().all())
 
-    fb_records = [r for r in records if r.platform == "facebook"]
-    google_records = [r for r in records if r.platform == "google"]
+    # Build per-platform stats
+    platforms = {}
+    for platform in ("facebook", "google", "tiktok"):
+        p_records = [r for r in records if r.platform == platform]
+        p_spend = sum(r.spend for r in p_records)
+        p_installs = sum(r.installs for r in p_records)
+        p_revenue = sum(r.revenue for r in p_records)
+        platforms[platform] = {
+            "spend": round(p_spend, 2),
+            "cpi": round(p_spend / max(p_installs, 1), 2),
+            "roas": round(p_revenue / max(p_spend, 0.01), 2),
+            "installs": p_installs,
+        }
 
-    fb_spend = sum(r.spend for r in fb_records)
-    google_spend = sum(r.spend for r in google_records)
-    total_spend = fb_spend + google_spend
-    fb_installs = sum(r.installs for r in fb_records)
-    google_installs = sum(r.installs for r in google_records)
-    fb_revenue = sum(r.revenue for r in fb_records)
-    google_revenue = sum(r.revenue for r in google_records)
+    total_spend = sum(p["spend"] for p in platforms.values())
+    total_installs = sum(p["installs"] for p in platforms.values())
 
     # Active campaigns
     camp_result = await db.execute(
@@ -57,14 +63,9 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         "date": today_start.strftime("%Y-%m-%d"),
         "total_spend": round(total_spend, 2),
         "daily_cap": settings.app.daily_spend_cap,
-        "fb_spend": round(fb_spend, 2),
-        "google_spend": round(google_spend, 2),
-        "fb_cpi": round(fb_spend / max(fb_installs, 1), 2),
-        "google_cpi": round(google_spend / max(google_installs, 1), 2),
-        "fb_roas": round(fb_revenue / max(fb_spend, 0.01), 2),
-        "google_roas": round(google_revenue / max(google_spend, 0.01), 2),
+        "platforms": platforms,
         "active_campaigns": active_campaigns,
-        "total_installs": fb_installs + google_installs,
+        "total_installs": total_installs,
         "recent_reports": recent_reports,
         "spend_pct": round(total_spend / max(settings.app.daily_spend_cap, 1) * 100, 1),
     })
@@ -88,6 +89,8 @@ async def campaigns_page(request: Request, db: AsyncSession = Depends(get_db)):
                 platform_url = f"https://business.facebook.com/adsmanager/manage/campaigns?act=&selected_campaign_ids={c.external_id}"
             elif c.platform == "google":
                 platform_url = f"https://ads.google.com/aw/campaigns?campaignId={c.external_id}"
+            elif c.platform == "tiktok":
+                platform_url = f"https://ads.tiktok.com/i18n/perf?aadvid={c.external_id}"
         campaign_data.append({
             "id": c.id,
             "name": c.name,

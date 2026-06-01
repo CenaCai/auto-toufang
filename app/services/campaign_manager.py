@@ -17,8 +17,7 @@ logger = logging.getLogger(__name__)
 
 async def check_and_rotate_creatives(
     db: AsyncSession,
-    fb_client: AdsClient,
-    google_client: AdsClient,
+    clients: dict[str, AdsClient],
 ) -> list[dict]:
     """Check each active campaign's creative performance and rotate if needed.
 
@@ -79,7 +78,10 @@ async def check_and_rotate_creatives(
 
         next_index = campaign.current_creative_index + 1
 
-        client = fb_client if campaign.platform == "facebook" else google_client
+        client = clients.get(campaign.platform)
+        if not client:
+            logger.warning(f"No client for platform '{campaign.platform}', skipping campaign {campaign.id}")
+            continue
 
         if next_index >= len(creatives):
             # No more creatives, pause campaign

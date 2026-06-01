@@ -23,6 +23,7 @@
             <th>ROAS</th>
             <th>FB花费</th>
             <th>Google花费</th>
+            <th>TikTok花费</th>
             <th>操作</th>
         </tr>
     </thead>
@@ -32,6 +33,7 @@
         {% set s = d.get('summary', {}) %}
         {% set fb = d.get('platform_breakdown', {}).get('facebook', {}) %}
         {% set g = d.get('platform_breakdown', {}).get('google', {}) %}
+        {% set tt = d.get('platform_breakdown', {}).get('tiktok', {}) %}
         <tr>
             <td>#{{ item.report.id }}</td>
             <td>{{ item.report.period_start.strftime('%m-%d %H:%M') }} ~ {{ item.report.period_end.strftime('%H:%M') }}</td>
@@ -45,6 +47,7 @@
             </td>
             <td>${{ fb.get('total_spend', 0) | round(2) }}</td>
             <td>${{ g.get('total_spend', 0) | round(2) }}</td>
+            <td>${{ tt.get('total_spend', 0) | round(2) }}</td>
             <td><a href="/reports/{{ item.report.id }}" class="btn btn-sm">详情</a></td>
         </tr>
         {% endfor %}

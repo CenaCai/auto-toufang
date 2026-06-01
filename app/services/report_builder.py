@@ -52,7 +52,7 @@ async def _build_report(
 
     # Aggregate by platform
     platform_data = {}
-    for platform in ("facebook", "google"):
+    for platform in ("facebook", "google", "tiktok"):
         p_records = [r for r in records if r.platform == platform]
         if not p_records:
             platform_data[platform] = {

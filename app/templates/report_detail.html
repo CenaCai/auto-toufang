@@ -42,7 +42,7 @@
 
 <!-- Platform breakdown -->
 <div class="card-grid">
-    {% for platform, label, color in [('facebook', 'Facebook Ads', 'card-fb'), ('google', 'Google Ads', 'card-google')] %}
+    {% for platform, label, color in [('facebook', 'Facebook Ads', 'card-fb'), ('google', 'Google Ads', 'card-google'), ('tiktok', 'TikTok Ads', 'card-tiktok')] %}
     {% set p = data.get('platform_breakdown', {}).get(platform, {}) %}
     <div class="card {{ color }}">
         <h3>{{ label }}</h3>
@@ -98,7 +98,7 @@
             <tr>
                 <td>{{ c.campaign_name }}</td>
                 <td>
-                    <span class="badge {% if c.platform == 'facebook' %}badge-blue{% else %}badge-green{% endif %}">
+                    <span class="badge {% if c.platform == 'facebook' %}badge-blue{% elif c.platform == 'google' %}badge-green{% elif c.platform == 'tiktok' %}badge-tiktok{% else %}badge-blue{% endif %}">
                         {{ c.platform }}
                     </span>
                 </td>
@@ -141,8 +141,9 @@
     {% if alloc %}
     <p style="margin-top: 12px;">
         <strong>预算分配:</strong>
-        Facebook ${{ alloc.get('facebook', 0) }} |
-        Google ${{ alloc.get('google', 0) }}
+        {% for pname, amount in alloc.items() %}
+        {{ pname }} ${{ amount }}{% if not loop.last %} | {% endif %}
+        {% endfor %}
     </p>
     {% endif %}
 </div>
