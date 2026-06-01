@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Campaign, Creative, SpendRecord, Report
 from app.schemas import (
-    CampaignCreate, CampaignOut, CampaignUpdate,
+    CampaignCreate, CampaignOut, CampaignUpdate, CreativeCreate,
     ReportOut, TodayStats,
 )
 from app.scheduler import get_clients, hourly_job
@@ -19,12 +19,18 @@ from app.scheduler import get_clients, hourly_job
 router = APIRouter(prefix="/api", tags=["api"])
 
 
+# --------------- Campaign CRUD ---------------
+
 @router.get("/campaigns", response_model=list[CampaignOut])
 async def list_campaigns(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Campaign).order_by(Campaign.created_at.desc())
     )
-    return result.scalars().all()
+    campaigns = result.scalars().all()
+    # Eagerly load creatives
+    for c in campaigns:
+        await db.refresh(c, ["creatives"])
+    return campaigns
 
 
 @router.post("/campaigns", response_model=CampaignOut)
@@ -35,6 +41,7 @@ async def create_campaign(data: CampaignCreate, db: AsyncSession = Depends(get_d
     campaign = Campaign(
         name=data.name,
         platform=data.platform,
+        external_id=data.external_id,
         budget_cap=data.budget_cap,
         cpi_cap=data.cpi_cap,
         roas_threshold=data.roas_threshold,
@@ -83,7 +90,162 @@ async def update_campaign(
     return campaign
 
 
-@router.get("/reports", response_model=list[ReportOut])
+# --------------- Campaign Operations ---------------
+
+@router.post("/campaigns/{campaign_id}/pause")
+async def pause_campaign(campaign_id: int, db: AsyncSession = Depends(get_db)):
+    """Pause a campaign (stop spending)."""
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+
+    fb_client, google_client = get_clients()
+    client = fb_client if campaign.platform == "facebook" else google_client
+    await client.pause_campaign(campaign.id)
+
+    campaign.is_active = False
+    await db.commit()
+    return {"status": "ok", "campaign_id": campaign_id, "is_active": False}
+
+
+@router.post("/campaigns/{campaign_id}/resume")
+async def resume_campaign(campaign_id: int, db: AsyncSession = Depends(get_db)):
+    """Resume a paused campaign."""
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+
+    fb_client, google_client = get_clients()
+    client = fb_client if campaign.platform == "facebook" else google_client
+    await client.resume_campaign(campaign.id)
+
+    campaign.is_active = True
+    await db.commit()
+    return {"status": "ok", "campaign_id": campaign_id, "is_active": True}
+
+
+@router.post("/campaigns/{campaign_id}/switch-creative")
+async def switch_creative(
+    campaign_id: int,
+    creative_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Switch active creative. If creative_id given, use that; otherwise rotate to next."""
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+
+    # Load creatives
+    creatives_result = await db.execute(
+        select(Creative)
+        .where(Creative.campaign_id == campaign_id, Creative.is_active == True)
+        .order_by(Creative.sort_order)
+    )
+    creatives = list(creatives_result.scalars().all())
+    if not creatives:
+        raise HTTPException(400, "No active creatives available for this campaign")
+
+    fb_client, google_client = get_clients()
+    client = fb_client if campaign.platform == "facebook" else google_client
+
+    if creative_id is not None:
+        # Switch to specific creative
+        target = next((c for c in creatives if c.id == creative_id), None)
+        if not target:
+            raise HTTPException(404, "Creative not found or not active in this campaign")
+        new_index = creatives.index(target)
+    else:
+        # Rotate to next
+        new_index = campaign.current_creative_index + 1
+        if new_index >= len(creatives):
+            new_index = 0  # loop back
+
+    target_creative = creatives[new_index]
+    campaign.current_creative_index = new_index
+    await client.set_active_creative(campaign.id, target_creative.id)
+    await db.commit()
+
+    return {
+        "status": "ok",
+        "campaign_id": campaign_id,
+        "new_creative_id": target_creative.id,
+        "new_creative_name": target_creative.name,
+        "creative_index": new_index,
+    }
+
+
+@router.delete("/campaigns/{campaign_id}")
+async def delete_campaign(campaign_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a campaign and all its data."""
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+
+    # Pause on platform first
+    fb_client, google_client = get_clients()
+    client = fb_client if campaign.platform == "facebook" else google_client
+    await client.pause_campaign(campaign.id)
+
+    await db.delete(campaign)
+    await db.commit()
+    return {"status": "ok", "deleted": campaign_id}
+
+
+@router.post("/campaigns/{campaign_id}/creatives")
+async def add_creative(
+    campaign_id: int,
+    data: CreativeCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a new creative to a campaign."""
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
+    campaign = result.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+
+    # Get max sort_order
+    max_order_result = await db.execute(
+        select(func.coalesce(func.max(Creative.sort_order), -1))
+        .where(Creative.campaign_id == campaign_id)
+    )
+    max_order = max_order_result.scalar_one()
+
+    creative = Creative(
+        campaign_id=campaign_id,
+        name=data.name,
+        asset_url=data.asset_url,
+        sort_order=data.sort_order if data.sort_order else max_order + 1,
+    )
+    db.add(creative)
+    await db.commit()
+    await db.refresh(creative)
+    return {"status": "ok", "creative_id": creative.id, "name": creative.name}
+
+
+@router.delete("/campaigns/{campaign_id}/creatives/{creative_id}")
+async def remove_creative(
+    campaign_id: int,
+    creative_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a creative from a campaign (soft-delete by marking inactive)."""
+    result = await db.execute(
+        select(Creative).where(Creative.id == creative_id, Creative.campaign_id == campaign_id)
+    )
+    creative = result.scalar_one_or_none()
+    if not creative:
+        raise HTTPException(404, "Creative not found")
+
+    creative.is_active = False
+    await db.commit()
+    return {"status": "ok", "creative_id": creative_id, "is_active": False}
+
+
+# --------------- Reports ---------------
 async def list_reports(
     report_type: str | None = None,
     date: str | None = None,
@@ -166,6 +328,7 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)):
         CampaignCreate(
             name="FB - Game Install US",
             platform="facebook",
+            external_id="120210123456789",
             budget_cap=2000.0,
             cpi_cap=3.0,
             roas_threshold=1.2,
@@ -178,6 +341,7 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)):
         CampaignCreate(
             name="FB - Game Install JP",
             platform="facebook",
+            external_id="120210987654321",
             budget_cap=1500.0,
             cpi_cap=4.0,
             roas_threshold=1.0,
@@ -189,6 +353,7 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)):
         CampaignCreate(
             name="Google - UAC US",
             platform="google",
+            external_id="18394027561",
             budget_cap=2500.0,
             cpi_cap=2.5,
             roas_threshold=1.3,
@@ -200,6 +365,7 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)):
         CampaignCreate(
             name="Google - UAC KR",
             platform="google",
+            external_id="18394027562",
             budget_cap=1800.0,
             cpi_cap=3.5,
             roas_threshold=1.1,
@@ -216,6 +382,7 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)):
         campaign = Campaign(
             name=data.name,
             platform=data.platform,
+            external_id=data.external_id,
             budget_cap=data.budget_cap,
             cpi_cap=data.cpi_cap,
             roas_threshold=data.roas_threshold,

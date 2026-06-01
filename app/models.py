@@ -25,6 +25,7 @@ class Campaign(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     platform: Mapped[str] = mapped_column(String(20), nullable=False)  # "facebook" or "google"
+    external_id: Mapped[str] = mapped_column(String(200), default="")  # FB/Google campaign ID
     budget_cap: Mapped[float] = mapped_column(Float, nullable=False)
     cpi_cap: Mapped[float] = mapped_column(Float, nullable=False)
     roas_threshold: Mapped[float] = mapped_column(Float, nullable=True)

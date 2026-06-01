@@ -18,6 +18,7 @@ class CreativeCreate(BaseModel):
 class CampaignCreate(BaseModel):
     name: str
     platform: str  # "facebook" or "google"
+    external_id: str = ""  # FB/Google campaign ID for linking to platform UI
     budget_cap: float
     cpi_cap: float
     roas_threshold: float | None = None
@@ -26,6 +27,7 @@ class CampaignCreate(BaseModel):
 
 class CampaignUpdate(BaseModel):
     name: str | None = None
+    external_id: str | None = None
     budget_cap: float | None = None
     cpi_cap: float | None = None
     roas_threshold: float | None = None
@@ -46,6 +48,7 @@ class CampaignOut(BaseModel):
     id: int
     name: str
     platform: str
+    external_id: str
     budget_cap: float
     cpi_cap: float
     roas_threshold: float | None
@@ -53,8 +56,16 @@ class CampaignOut(BaseModel):
     is_active: bool
     created_at: datetime.datetime
     creatives: list[CreativeOut] = []
+    platform_url: str = ""  # computed: link to FB/Google Ads manager
 
     model_config = {"from_attributes": True}
+
+    def model_post_init(self, __context):
+        if self.external_id:
+            if self.platform == "facebook":
+                self.platform_url = f"https://business.facebook.com/adsmanager/manage/campaigns?act=&selected_campaign_ids={self.external_id}"
+            elif self.platform == "google":
+                self.platform_url = f"https://ads.google.com/aw/campaigns?campaignId={self.external_id}"
 
 
 # --- Stats ---

@@ -12,7 +12,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Campaign, SpendRecord, Report
+from app.models import Campaign, Creative, SpendRecord, Report
 from app.config import settings
 
 router = APIRouter(tags=["dashboard"])
@@ -67,6 +67,43 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         "total_installs": fb_installs + google_installs,
         "recent_reports": recent_reports,
         "spend_pct": round(total_spend / max(settings.app.daily_spend_cap, 1) * 100, 1),
+    })
+
+
+@router.get("/campaigns", response_class=HTMLResponse)
+async def campaigns_page(request: Request, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Campaign).order_by(Campaign.created_at.desc())
+    )
+    campaigns = list(result.scalars().all())
+
+    # Load creatives and compute platform_url for each
+    campaign_data = []
+    for c in campaigns:
+        await db.refresh(c, ["creatives"])
+        # Compute platform URL
+        platform_url = ""
+        if c.external_id:
+            if c.platform == "facebook":
+                platform_url = f"https://business.facebook.com/adsmanager/manage/campaigns?act=&selected_campaign_ids={c.external_id}"
+            elif c.platform == "google":
+                platform_url = f"https://ads.google.com/aw/campaigns?campaignId={c.external_id}"
+        campaign_data.append({
+            "id": c.id,
+            "name": c.name,
+            "platform": c.platform,
+            "external_id": c.external_id or "",
+            "budget_cap": c.budget_cap,
+            "cpi_cap": c.cpi_cap,
+            "roas_threshold": c.roas_threshold,
+            "current_creative_index": c.current_creative_index,
+            "is_active": c.is_active,
+            "platform_url": platform_url,
+            "creatives": sorted(c.creatives, key=lambda x: x.sort_order),
+        })
+
+    return templates.TemplateResponse(name="campaigns.html", request=request, context={
+        "campaigns": campaign_data,
     })
 
 
