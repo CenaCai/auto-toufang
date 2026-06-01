@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Auto投放{% endblock %} - 广告投放管理系统</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">Auto投放</div>
+        <div class="nav-links">
+            <a href="/" class="nav-link">仪表盘</a>
+            <a href="/reports/hourly" class="nav-link">小时报</a>
+            <a href="/reports/daily" class="nav-link">日报</a>
+        </div>
+    </nav>
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="footer">
+        <p>Auto投放 - Facebook & Google Ads 自动化管理</p>
+    </footer>
+</body>
+</html>

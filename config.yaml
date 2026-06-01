@@ -1,0 +1,23 @@
+app:
+  daily_spend_cap: 10000.0
+  default_cpi_cap: 2.5
+  default_roas_threshold: 1.2
+  creative_fail_hours: 2
+  budget_shift_ratio: 0.7
+  use_mock: true
+
+database:
+  url: "sqlite+aiosqlite:///./data/auto_toufang.db"
+
+notifications:
+  feishu:
+    enabled: true
+    webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-token"
+  email:
+    enabled: false
+    smtp_host: "smtp.example.com"
+    smtp_port: 465
+    smtp_user: ""
+    smtp_password: ""
+    recipients:
+      - "ops@example.com"

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}仪表盘{% endblock %}
+{% block content %}
+<h1>投放仪表盘</h1>
+<p class="subtitle">{{ date }} | 活跃Campaign: {{ active_campaigns }}</p>
+
+<!-- Daily budget progress -->
+<div class="budget-bar-container">
+    <div class="budget-bar-label">
+        <span>日预算消耗: ${{ total_spend }} / ${{ daily_cap }}</span>
+        <span>{{ spend_pct }}%</span>
+    </div>
+    <div class="budget-bar">
+        <div class="budget-bar-fill {% if spend_pct > 90 %}bar-danger{% elif spend_pct > 70 %}bar-warning{% endif %}"
+             style="width: {{ spend_pct }}%"></div>
+    </div>
+</div>
+
+<!-- Platform cards -->
+<div class="card-grid">
+    <div class="card card-fb">
+        <h3>Facebook Ads</h3>
+        <div class="card-stats">
+            <div class="stat">
+                <span class="stat-label">花费</span>
+                <span class="stat-value">${{ fb_spend }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">CPI</span>
+                <span class="stat-value">${{ fb_cpi }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">ROAS</span>
+                <span class="stat-value">{{ fb_roas }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="card card-google">
+        <h3>Google Ads</h3>
+        <div class="card-stats">
+            <div class="stat">
+                <span class="stat-label">花费</span>
+                <span class="stat-value">${{ google_spend }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">CPI</span>
+                <span class="stat-value">${{ google_cpi }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">ROAS</span>
+                <span class="stat-value">{{ google_roas }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary row -->
+<div class="card">
+    <h3>今日汇总</h3>
+    <div class="card-stats">
+        <div class="stat">
+            <span class="stat-label">总花费</span>
+            <span class="stat-value">${{ total_spend }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">总安装</span>
+            <span class="stat-value">{{ total_installs }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">日预算上限</span>
+            <span class="stat-value">${{ daily_cap }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Recent reports -->
+<div class="card">
+    <h3>最近报告</h3>
+    {% if recent_reports %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>类型</th>
+                <th>时间段</th>
+                <th>生成时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in recent_reports %}
+            <tr>
+                <td>#{{ r.id }}</td>
+                <td>
+                    <span class="badge {% if r.report_type == 'hourly' %}badge-blue{% else %}badge-purple{% endif %}">
+                        {{ '小时报' if r.report_type == 'hourly' else '日报' }}
+                    </span>
+                </td>
+                <td>{{ r.period_start.strftime('%Y-%m-%d %H:%M') }} ~ {{ r.period_end.strftime('%H:%M') }}</td>
+                <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td><a href="/reports/{{ r.id }}" class="btn btn-sm">查看</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">暂无报告。点击下方按钮触发一次优化周期生成报告。</p>
+    <button onclick="triggerOptimize()" class="btn btn-primary" id="optimizeBtn">手动触发优化</button>
+    <script>
+    async function triggerOptimize() {
+        const btn = document.getElementById('optimizeBtn');
+        btn.disabled = true;
+        btn.textContent = '执行中...';
+        try {
+            const res = await fetch('/api/optimize/trigger', { method: 'POST' });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                location.reload();
+            } else {
+                alert('触发失败: ' + JSON.stringify(data));
+            }
+        } catch (e) {
+            alert('请求失败: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '手动触发优化';
+        }
+    }
+    </script>
+    {% endif %}
+</div>
+{% endblock %}

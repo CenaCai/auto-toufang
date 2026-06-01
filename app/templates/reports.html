@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+
+{% if report_type == 'hourly' %}
+<form class="filter-form" method="get">
+    <label>按日期筛选:
+        <input type="date" name="date" value="{{ filter_date }}" onchange="this.form.submit()">
+    </label>
+</form>
+{% endif %}
+
+{% if reports %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>时间段</th>
+            <th>总花费</th>
+            <th>总安装</th>
+            <th>CPI</th>
+            <th>ROAS</th>
+            <th>FB花费</th>
+            <th>Google花费</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in reports %}
+        {% set d = item.data %}
+        {% set s = d.get('summary', {}) %}
+        {% set fb = d.get('platform_breakdown', {}).get('facebook', {}) %}
+        {% set g = d.get('platform_breakdown', {}).get('google', {}) %}
+        <tr>
+            <td>#{{ item.report.id }}</td>
+            <td>{{ item.report.period_start.strftime('%m-%d %H:%M') }} ~ {{ item.report.period_end.strftime('%H:%M') }}</td>
+            <td>${{ s.get('total_spend', 0) | round(2) }}</td>
+            <td>{{ s.get('total_installs', 0) }}</td>
+            <td class="{% if s.get('overall_cpi', 0) > 3 %}text-danger{% elif s.get('overall_cpi', 0) > 2 %}text-warning{% else %}text-success{% endif %}">
+                ${{ s.get('overall_cpi', 0) | round(2) }}
+            </td>
+            <td class="{% if s.get('overall_roas', 0) < 1 %}text-danger{% elif s.get('overall_roas', 0) < 1.2 %}text-warning{% else %}text-success{% endif %}">
+                {{ s.get('overall_roas', 0) | round(2) }}
+            </td>
+            <td>${{ fb.get('total_spend', 0) | round(2) }}</td>
+            <td>${{ g.get('total_spend', 0) | round(2) }}</td>
+            <td><a href="/reports/{{ item.report.id }}" class="btn btn-sm">详情</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty-state">暂无{{ title }}数据</p>
+{% endif %}
+{% endblock %}

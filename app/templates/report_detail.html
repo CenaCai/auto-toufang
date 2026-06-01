@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}报告详情 #{{ report.id }}{% endblock %}
+{% block content %}
+<h1>
+    <span class="badge {% if report.report_type == 'hourly' %}badge-blue{% else %}badge-purple{% endif %}">
+        {{ '小时报' if report.report_type == 'hourly' else '日报' }}
+    </span>
+    报告 #{{ report.id }}
+</h1>
+<p class="subtitle">
+    {{ report.period_start.strftime('%Y-%m-%d %H:%M') }} ~ {{ report.period_end.strftime('%Y-%m-%d %H:%M') }}
+    | 生成于 {{ report.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+</p>
+
+<!-- Summary -->
+{% set s = data.get('summary', {}) %}
+<div class="card">
+    <h3>总览</h3>
+    <div class="card-stats">
+        <div class="stat">
+            <span class="stat-label">总花费</span>
+            <span class="stat-value">${{ s.get('total_spend', 0) }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">总安装</span>
+            <span class="stat-value">{{ s.get('total_installs', 0) }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">总收入</span>
+            <span class="stat-value">${{ s.get('total_revenue', 0) }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">CPI</span>
+            <span class="stat-value {% if s.get('overall_cpi', 0) > 3 %}text-danger{% endif %}">${{ s.get('overall_cpi', 0) }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">ROAS</span>
+            <span class="stat-value {% if s.get('overall_roas', 0) < 1 %}text-danger{% endif %}">{{ s.get('overall_roas', 0) }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Platform breakdown -->
+<div class="card-grid">
+    {% for platform, label, color in [('facebook', 'Facebook Ads', 'card-fb'), ('google', 'Google Ads', 'card-google')] %}
+    {% set p = data.get('platform_breakdown', {}).get(platform, {}) %}
+    <div class="card {{ color }}">
+        <h3>{{ label }}</h3>
+        <div class="card-stats">
+            <div class="stat">
+                <span class="stat-label">花费</span>
+                <span class="stat-value">${{ p.get('total_spend', 0) }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">展示</span>
+                <span class="stat-value">{{ p.get('total_impressions', 0) }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">点击</span>
+                <span class="stat-value">{{ p.get('total_clicks', 0) }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">安装</span>
+                <span class="stat-value">{{ p.get('total_installs', 0) }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">CPI</span>
+                <span class="stat-value">${{ p.get('avg_cpi', 0) }}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">ROAS</span>
+                <span class="stat-value">{{ p.get('overall_roas', 0) }}</span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Campaign details -->
+{% set campaigns = data.get('campaign_details', []) %}
+{% if campaigns %}
+<div class="card">
+    <h3>Campaign 明细</h3>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Campaign</th>
+                <th>平台</th>
+                <th>花费</th>
+                <th>安装</th>
+                <th>收入</th>
+                <th>CPI</th>
+                <th>ROAS</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in campaigns %}
+            <tr>
+                <td>{{ c.campaign_name }}</td>
+                <td>
+                    <span class="badge {% if c.platform == 'facebook' %}badge-blue{% else %}badge-green{% endif %}">
+                        {{ c.platform }}
+                    </span>
+                </td>
+                <td>${{ c.spend }}</td>
+                <td>{{ c.installs }}</td>
+                <td>${{ c.revenue }}</td>
+                <td class="{% if c.cpi > 3 %}text-danger{% elif c.cpi > 2 %}text-warning{% else %}text-success{% endif %}">
+                    ${{ c.cpi }}
+                </td>
+                <td class="{% if c.roas < 1 %}text-danger{% elif c.roas < 1.2 %}text-warning{% else %}text-success{% endif %}">
+                    {{ c.roas }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Optimization info (if hourly) -->
+{% set opt = data.get('optimization', {}) %}
+{% if opt %}
+<div class="card">
+    <h3>优化操作</h3>
+    <div class="card-stats">
+        <div class="stat">
+            <span class="stat-label">操作</span>
+            <span class="stat-value">{{ opt.get('action', '-') }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">日消耗</span>
+            <span class="stat-value">${{ opt.get('daily_spend_total', 0) }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">日上限</span>
+            <span class="stat-value">${{ opt.get('daily_cap', 0) }}</span>
+        </div>
+    </div>
+    {% set alloc = opt.get('budget_allocation', {}) %}
+    {% if alloc %}
+    <p style="margin-top: 12px;">
+        <strong>预算分配:</strong>
+        Facebook ${{ alloc.get('facebook', 0) }} |
+        Google ${{ alloc.get('google', 0) }}
+    </p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Creative rotations -->
+{% set rotations = data.get('creative_rotations', []) %}
+{% if rotations %}
+<div class="card">
+    <h3>素材轮换</h3>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Campaign</th>
+                <th>操作</th>
+                <th>新素材</th>
+                <th>原因</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rotations %}
+            <tr>
+                <td>{{ r.campaign_name }}</td>
+                <td>
+                    <span class="badge {% if r.action == 'paused' %}badge-red{% else %}badge-blue{% endif %}">
+                        {{ r.action }}
+                    </span>
+                </td>
+                <td>{{ r.get('new_creative', '-') }}</td>
+                <td>{{ r.reason }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<a href="javascript:history.back()" class="btn">返回</a>
+{% endblock %}
